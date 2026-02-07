@@ -36,10 +36,16 @@ PIHOLE_DNS_4=
 EOF
 
 # Also save a copy to the project configs dir
+mkdir -p "${CONFIGS_DIR}"
 cp /etc/pihole/setupVars.conf "${CONFIGS_DIR}/setupVars.conf"
 
-echo "Running Pi-hole unattended install..."
-curl -sSL https://install.pi-hole.net | bash /dev/stdin --unattended
+if command -v pihole &>/dev/null; then
+    echo "Pi-hole already installed, reconfiguring..."
+    pihole -r --reconfigure --unattended
+else
+    echo "Running Pi-hole unattended install..."
+    curl -sSL https://install.pi-hole.net | bash /dev/stdin --unattended
+fi
 
 echo ""
 echo "========================================="

@@ -15,14 +15,14 @@ if [[ ! "${CLIENT_NAME}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     exit 1
 fi
 
-# Check if client already exists
-if [[ -f "${CLIENTS_DIR}/${CLIENT_NAME}.conf" ]]; then
-    echo "Error: Client '${CLIENT_NAME}' already exists."
-    echo "Config: ${CLIENTS_DIR}/${CLIENT_NAME}.conf"
-    exit 1
-fi
-
 mkdir -p "${CLIENTS_DIR}"
+
+# If client already exists, remove old peer from server config and reuse its IP
+if [[ -f "${CLIENTS_DIR}/${CLIENT_NAME}.conf" ]]; then
+    echo "  Client '${CLIENT_NAME}' already exists, overwriting..."
+    # Remove old peer block from wg0.conf (comment line + [Peer] block)
+    sed -i "/^# Client: ${CLIENT_NAME}$/,/^$/d" /etc/wireguard/wg0.conf
+fi
 
 # Get server info
 SERVER_PUBKEY=$(cat /etc/wireguard/server_public.key)

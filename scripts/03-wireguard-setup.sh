@@ -7,20 +7,31 @@ WG_SERVER_CIDR="${WG_SERVER_CIDR:-10.66.66.1/24}"
 echo "Installing WireGuard..."
 apt install -y wireguard
 
-echo "Generating server keypair..."
 umask 077
 mkdir -p /etc/wireguard
-wg genkey | tee /etc/wireguard/server_private.key | wg pubkey > /etc/wireguard/server_public.key
+
+if [[ -f /etc/wireguard/server_private.key ]]; then
+    echo "Server keypair already exists, reusing..."
+else
+    echo "Generating server keypair..."
+    wg genkey | tee /etc/wireguard/server_private.key | wg pubkey > /etc/wireguard/server_public.key
+fi
 SERVER_PRIVKEY=$(cat /etc/wireguard/server_private.key)
 SERVER_PUBKEY=$(cat /etc/wireguard/server_public.key)
 
-echo "Detecting public IP..."
-PUBLIC_IP=$(curl -s ifconfig.me)
+echo "Detecting public IPv4 address..."
+PUBLIC_IP=$(curl -4 -s ifconfig.me)
 echo "  Public IP: ${PUBLIC_IP}"
 
 echo "Detecting default network interface..."
 DEFAULT_IFACE=$(ip -4 route show default | awk '{print $5}' | head -1)
 echo "  Default interface: ${DEFAULT_IFACE}"
+
+# Stop WireGuard if running so we can rewrite the config
+if systemctl is-active --quiet wg-quick@wg0; then
+    echo "Stopping existing WireGuard interface..."
+    systemctl stop wg-quick@wg0
+fi
 
 echo "Writing /etc/wireguard/wg0.conf..."
 cat > /etc/wireguard/wg0.conf << EOF
@@ -47,7 +58,7 @@ fi
 
 echo "Enabling and starting WireGuard..."
 systemctl enable wg-quick@wg0
-systemctl start wg-quick@wg0
+systemctl restart wg-quick@wg0
 
 echo "Configuring firewall..."
 if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
