@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export DEBIAN_FRONTEND=noninteractive
+APT_DPKG_FORCE_CONFNEW=(
+    -o Dpkg::Options::=--force-confdef
+    -o Dpkg::Options::=--force-confnew
+)
+
 echo "Updating system packages..."
-apt update && apt upgrade -y
+apt update
+apt upgrade -y "${APT_DPKG_FORCE_CONFNEW[@]}"
 
 echo "Installing required packages..."
-apt install -y zsh git curl wget qrencode
+apt install -y "${APT_DPKG_FORCE_CONFNEW[@]}" zsh git curl wget qrencode
 
 echo "Installing Oh-My-Zsh (unattended)..."
 CALLING_USER="${SUDO_USER:-root}"

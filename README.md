@@ -2,6 +2,16 @@
 
 Ad-blocking VPN server combining Pi-hole DNS with WireGuard. Clients connect via WireGuard and route DNS through Pi-hole for ad-free browsing.
 
+## Quick-setup
+
+Automatically destroy, create and run DigitalOcean droplet with
+
+```
+./droplet.py
+```
+
+(assumes you already have `doctl` and are already signed in to your instance).
+
 ## Setup
 
 ```bash
