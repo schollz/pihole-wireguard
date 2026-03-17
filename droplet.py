@@ -32,6 +32,7 @@ from rich.traceback import install as install_rich_traceback
 install_rich_traceback(show_locals=False)
 console = Console()
 LOCAL_TZ = tz.tzlocal()
+REBOOT_REQUIRED_EXIT_CODE = 194
 
 
 class CommandError(RuntimeError):
@@ -99,7 +100,7 @@ def parse_args() -> argparse.Namespace:
         description="Create a DigitalOcean droplet, upload this repo, and run setup.sh.",
     )
     parser.add_argument("name", nargs="?", default=default_name, help="Droplet name.")
-    parser.add_argument("--region", default="sfo3", help="DigitalOcean region slug.")
+    parser.add_argument("--region", default="tor1", help="DigitalOcean region slug.")
     parser.add_argument("--size", default="s-1vcpu-1gb", help="DigitalOcean size slug.")
     parser.add_argument("--image", default="ubuntu-24-04-x64", help="Droplet image slug.")
     parser.add_argument(
@@ -338,6 +339,19 @@ def wait_for_ssh(ip: str, private_key: Path, timeout_seconds: int, runner: Runne
     raise SystemExit(f"timed out waiting for SSH on {ip}")
 
 
+def wait_for_ssh_to_drop(ip: str, private_key: Path, timeout_seconds: int, runner: Runner) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    ssh_base = ssh_options(private_key)
+    while time.monotonic() < deadline:
+        try:
+            runner.run([*ssh_base, f"root@{ip}", "true"], check=True)
+        except CommandError:
+            return
+        time.sleep(2)
+
+    raise SystemExit(f"timed out waiting for SSH on {ip} to go down for reboot")
+
+
 def ssh_options(private_key: Path) -> list[str]:
     return [
         "ssh",
@@ -393,15 +407,38 @@ def upload_and_run(
 ) -> None:
     remote_archive = f"/root/{archive_path.name}"
     runner.run([*scp_options(private_key), str(archive_path), f"root@{ip}:{remote_archive}"])
-    remote_script = (
+    unpack_script = (
         f"set -euo pipefail; "
         f"mkdir -p {shlex.quote(remote_dir)}; "
         f"tar xzf {shlex.quote(remote_archive)} -C {shlex.quote(remote_dir)}; "
-        f"rm -f {shlex.quote(remote_archive)}; "
+        f"rm -f {shlex.quote(remote_archive)}"
+    )
+    runner.run([*ssh_options(private_key), f"root@{ip}", unpack_script], cwd=project_dir)
+
+    setup_script = (
+        f"set -euo pipefail; "
         f"cd {shlex.quote(remote_dir)}; "
         f"bash setup.sh"
     )
-    runner.run([*ssh_options(private_key), f"root@{ip}", remote_script], cwd=project_dir)
+    while True:
+        try:
+            runner.run([*ssh_options(private_key), f"root@{ip}", setup_script], cwd=project_dir)
+            return
+        except CommandError as exc:
+            if exc.returncode != REBOOT_REQUIRED_EXIT_CODE:
+                raise
+
+            console.print(
+                "[yellow]Remote setup requested a reboot after package upgrades; restarting and resuming...[/]"
+            )
+            reboot_command = "nohup bash -lc 'sleep 1; systemctl reboot' >/dev/null 2>&1 &"
+            runner.run(
+                [*ssh_options(private_key), f"root@{ip}", reboot_command],
+                cwd=project_dir,
+                check=False,
+            )
+            wait_for_ssh_to_drop(ip, private_key, 120, runner)
+            wait_for_ssh(ip, private_key, 600, runner)
 
 
 def main() -> int:

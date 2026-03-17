@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REBOOT_REQUIRED_EXIT_CODE="${REBOOT_REQUIRED_EXIT_CODE:-194}"
+
 export DEBIAN_FRONTEND=noninteractive
 APT_DPKG_FORCE_CONFNEW=(
     -o Dpkg::Options::=--force-confdef
@@ -44,5 +46,10 @@ export LANG=en_US.UTF-8
 ZSHRC
 
 chown "${CALLING_USER}:${CALLING_USER}" "${CALLING_USER_HOME}/.zshrc"
+
+if [[ -f /var/run/reboot-required ]]; then
+    echo "A reboot is required before continuing setup."
+    exit "${REBOOT_REQUIRED_EXIT_CODE}"
+fi
 
 echo "System setup complete."
