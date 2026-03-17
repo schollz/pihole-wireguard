@@ -3,6 +3,7 @@ set -euo pipefail
 
 WG_PORT="${WG_PORT:-51820}"
 WG_SERVER_IP="${WG_SERVER_IP:-10.66.66.1}"
+WG_CLIENT_MTU="${WG_CLIENT_MTU:-1280}"
 
 CLIENT_NAME="${1:-phone}"
 CLIENTS_DIR="/etc/wireguard/clients"
@@ -53,6 +54,7 @@ cat > "${CLIENTS_DIR}/${CLIENT_NAME}.conf" << EOF
 PrivateKey = ${CLIENT_PRIVKEY}
 Address = ${CLIENT_IP}/32
 DNS = ${WG_SERVER_IP}
+MTU = ${WG_CLIENT_MTU}
 
 [Peer]
 PublicKey = ${SERVER_PUBKEY}
